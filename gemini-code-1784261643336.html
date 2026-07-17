@@ -1,0 +1,1302 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>高效个人工作台</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Material Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Material+Icons&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        onenote: {
+                            purple: '#732770',
+                            purpleHover: '#5c1e59',
+                            purpleLight: '#f3e8f3',
+                            bgGray: '#f8fafc',
+                            activeBg: '#f1f5f9',
+                            border: '#e2e8f0'
+                        },
+                        calTeal: '#1e6b7b'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f1f5f9;
+            user-select: none;
+        }
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .col-divider {
+            position: relative; width: 4px; margin: 0 -2px; z-index: 30; cursor: col-resize; transition: background-color 0.2s;
+        }
+        .col-divider:hover, .col-divider.dragging { background-color: #732770; opacity: 0.5; }
+        
+        #pane-sections.is-collapsed .expanded-only { display: none !important; }
+        #pane-sections.is-collapsed .collapsed-only { display: flex !important; }
+        #pane-sections:not(.is-collapsed) .expanded-only { display: flex !important; }
+        #pane-sections:not(.is-collapsed) .collapsed-only { display: none !important; }
+        #pane-sections { transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+
+        #pane-pages.is-collapsed .expanded-only { display: none !important; }
+        #pane-pages.is-collapsed .collapsed-only { display: flex !important; }
+        #pane-pages:not(.is-collapsed) .expanded-only { display: flex !important; }
+        #pane-pages:not(.is-collapsed) .collapsed-only { display: none !important; }
+        #pane-pages { transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+
+        .flip-card-container {
+            background: linear-gradient(135deg, #1e222a 0%, #111418 100%);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.15), inset 0 1px 1px rgba(255,255,255,0.15);
+            border: 1px solid #2d333b;
+            padding: 0.85rem 1rem;
+            border-radius: 10px;
+        }
+        .flip-card-unit {
+            width: 72px; 
+            height: 84px; 
+            background: linear-gradient(to bottom, #2b2b2b 0%, #1a1a1a 49%, #050505 50%, #111111 100%);
+            border: 1px solid #000;
+            border-radius: 8px;
+            position: relative;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.1);
+        }
+        .flip-card-unit::after {
+            content: '';
+            position: absolute;
+            top: 50%; left: 0; right: 0;
+            height: 2px;
+            background: #000;
+            box-shadow: 0 1px 0 rgba(255,255,255,0.1);
+            margin-top: -1px;
+            z-index: 10;
+        }
+        .flip-card-unit span {
+            font-size: 3.5rem;
+            font-weight: 800;
+            color: #ffffff;
+            font-family: Arial, Helvetica, sans-serif;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 5;
+            text-shadow: 0 3px 6px rgba(0,0,0,1);
+        }
+
+        #note-content-input:not(.draw-mode-hidden):empty:before {
+            content: attr(placeholder);
+            color: #94a3b8;
+            cursor: text;
+        }
+        [contenteditable] img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+            margin: 8px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        #editor-container {
+            background-color: #ffffff;
+            transition: background-color 0.2s ease;
+        }
+        #editor-container.draw-mode-active {
+            background-color: #121214 !important;
+            background-image: radial-gradient(#27272a 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        #pane-editor:fullscreen {
+            background-color: #121214 !important;
+            padding: 24px 48px;
+            display: flex;
+            flex-direction: column;
+            width: 100vw !important;
+            height: 100vh !important;
+        }
+        #pane-editor:fullscreen #editor-container {
+            flex: 1;
+            height: auto;
+        }
+
+        #drawing-canvas {
+            width: 100% !important;
+            height: 100% !important;
+            display: block;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen overflow-hidden flex flex-col text-gray-800">
+
+    <div class="flex-1 flex flex-row overflow-hidden w-full h-full relative">
+        
+        <!-- 左侧三段式容器 -->
+        <div id="pane-left-container" class="h-full flex flex-col bg-white shrink-0 select-none border-r border-gray-200 overflow-hidden shadow-sm" style="width: 340px; min-width: 300px; max-width: 480px;">
+            
+            <!-- 第一段：日历 -->
+            <div id="pane-calendar" class="shrink-0 flex flex-col px-3 py-2 bg-white border-b border-gray-200">
+                <div class="shrink-0 mb-1 flex items-baseline justify-between">
+                    <div>
+                        <span id="large-date-header" class="text-xs font-bold text-gray-800">加载中...</span>
+                        <span id="large-lunar-header" class="text-[10px] text-gray-500 ml-1"></span>
+                    </div>
+                </div>
+
+                <div class="bg-gray-50 rounded-lg shadow-sm border border-gray-200 p-2 relative shrink-0">
+                    <div class="flex items-center justify-between mb-1 px-0.5 relative">
+                        <button onclick="toggleMonthPicker(event)" id="calendar-month-year" class="font-bold text-xs text-gray-800 hover:text-calTeal flex items-center gap-1 transition px-1.5 py-0.5 rounded hover:bg-gray-200">
+                            <span>2026年7月</span>
+                            <span class="material-icons text-[14px]">arrow_drop_down</span>
+                        </button>
+
+                        <div id="month-picker-dropdown" onclick="event.stopPropagation()" class="absolute top-8 left-0 z-50 bg-white border border-gray-300 rounded-lg shadow-xl p-3 w-56 hidden select-none">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-[11px] font-bold text-gray-800">跳转到指定年月</span>
+                                <button onclick="toggleMonthPicker(event)" class="text-gray-400 hover:text-gray-600">
+                                    <span class="material-icons text-sm">close</span>
+                                </button>
+                            </div>
+                            <div class="space-y-2">
+                                <div>
+                                    <label class="text-[10px] text-gray-500 block mb-0.5">选择年份</label>
+                                    <select id="jump-year-select" class="w-full text-xs border border-gray-300 rounded p-1 bg-white text-gray-800 outline-none focus:ring-1 focus:ring-calTeal"></select>
+                                </div>
+                                <div>
+                                    <label class="text-[10px] text-gray-500 block mb-0.5">选择月份</label>
+                                    <select id="jump-month-select" class="w-full text-xs border border-gray-300 rounded p-1 bg-white text-gray-800 outline-none focus:ring-1 focus:ring-calTeal">
+                                        <option value="0">1月</option><option value="1">2月</option><option value="2">3月</option><option value="3">4月</option>
+                                        <option value="4">5月</option><option value="5">6月</option><option value="6">7月</option><option value="7">8月</option>
+                                        <option value="8">9月</option><option value="9">10月</option><option value="10">11月</option><option value="11">12月</option>
+                                    </select>
+                                </div>
+                                <button onclick="confirmJumpYearMonth()" class="w-full bg-calTeal hover:bg-[#144d59] text-white text-xs font-semibold py-1 rounded transition shadow-sm mt-1">确认跳转</button>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center space-x-1">
+                            <button onclick="jumpToToday()" class="hover:bg-gray-200 text-calTeal text-[10px] font-bold px-1.5 py-0.5 rounded border border-teal-600 transition" title="回到今天">今日</button>
+                            <button onclick="prevMonth()" class="hover:bg-gray-200 p-0.5 rounded text-gray-500 transition" title="上一月"><span class="material-icons text-sm">chevron_left</span></button>
+                            <button onclick="nextMonth()" class="hover:bg-gray-200 p-0.5 rounded text-gray-500 transition" title="下一月"><span class="material-icons text-sm">chevron_right</span></button>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold text-gray-400 mb-0.5">
+                        <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span class="text-blue-500">六</span><span class="text-red-500">日</span>
+                    </div>
+                    <div id="calendar-days-grid" class="grid grid-cols-7 gap-y-0.5 gap-x-1 text-center"></div>
+                </div>
+            </div>
+
+            <!-- 第二段：放大时钟 -->
+            <div id="pane-flip-clock" class="shrink-0 flex flex-col px-3 py-3 bg-white justify-center border-b border-gray-200">
+                <div class="flip-card-container flex items-center justify-center shrink-0">
+                    <div class="flex items-center justify-center gap-3">
+                        <div class="flip-card-unit"><span id="clock-hh">00</span></div>
+                        <span class="text-slate-400 text-3xl font-bold animate-pulse pb-1 drop-shadow-md">:</span>
+                        <div class="flip-card-unit"><span id="clock-mm">00</span></div>
+                        <span class="text-slate-400 text-3xl font-bold animate-pulse pb-1 drop-shadow-md">:</span>
+                        <div class="flip-card-unit"><span id="clock-ss">00</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 第三段：天气看板 -->
+            <div id="pane-weather" class="flex-1 flex flex-col bg-white overflow-y-auto p-3">
+                <div class="flex items-center justify-between pb-1.5 mb-2 border-b border-gray-200 bg-white sticky top-0 z-10 shrink-0">
+                    <div class="flex items-center gap-1.5">
+                        <span class="material-icons text-calTeal text-base animate-pulse">wb_cloudy</span>
+                        <span class="font-bold text-xs text-gray-800">局部气候看板</span>
+                    </div>
+                    <select id="weather-city" onchange="switchWeatherCity(this.value)" class="text-[10px] border border-gray-300 rounded px-1.5 py-0.5 bg-white text-gray-700 outline-none focus:ring-1 focus:ring-calTeal">
+                        <option value="Yokohama" selected>横滨 (Yokohama)</option>
+                        <option value="Tokyo">东京 (Tokyo)</option>
+                        <option value="Beijing">北京 (Beijing)</option>
+                        <option value="Shanghai">上海 (Shanghai)</option>
+                    </select>
+                </div>
+                <div class="space-y-2 shrink-0">
+                    <div class="flex items-center justify-between bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200 p-2 rounded-lg shadow-sm">
+                        <div>
+                            <div id="weather-current-temp" class="text-lg font-extrabold text-calTeal">24°C</div>
+                            <div id="weather-current-cond" class="text-[11px] text-gray-600 font-medium">阴天转阵雨</div>
+                        </div>
+                        <div class="text-right text-[9px] text-gray-500 space-y-0.5">
+                            <div>降水率: <span id="weather-current-prob" class="font-bold text-calTeal">35%</span></div>
+                            <div>湿度: <span id="weather-current-humidity">72%</span></div>
+                            <div>风速: <span id="weather-current-wind">2.5m/s</span></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider flex items-center gap-1">
+                            <span class="material-icons text-[11px] text-blue-500">umbrella</span><span>降水及温度逐时概率 (24H)</span>
+                        </div>
+                        <div class="overflow-x-auto pb-1"><div id="weather-hourly-list" class="flex gap-2 min-w-max px-0.5"></div></div>
+                    </div>
+                    <div>
+                        <div class="text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider flex items-center gap-1">
+                            <span class="material-icons text-[11px] text-orange-500">wb_sunny</span><span>未来一周趋势 (7天)</span>
+                        </div>
+                        <div id="weather-weekly-list" class="space-y-1"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-divider" id="resizer-1" data-left="pane-left-container" data-right="pane-agenda"></div>
+
+        <!-- 中间日程预定 -->
+        <div id="pane-agenda" class="h-full bg-white flex flex-col shrink-0 overflow-hidden border-r border-gray-200 shadow-sm" style="width: 280px; min-width: 220px; max-width: 450px;">
+            <div class="p-3 flex items-center justify-between border-b border-gray-200 shrink-0 bg-gray-50">
+                <h2 id="agenda-panel-title" class="text-sm font-bold text-gray-800 tracking-wide flex items-center gap-1.5">
+                    <span class="material-icons text-onenote-purple text-base">format_list_bulleted</span><span>今日预定</span>
+                </h2>
+                <div class="flex items-center gap-1">
+                    <span id="agenda-count" class="text-[10px] bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full font-semibold">0</span>
+                </div>
+            </div>
+            <div id="agenda-items-container" class="flex-1 overflow-y-auto p-3 space-y-2 bg-gray-50/50"></div>
+            <div class="p-3 border-t border-gray-200 bg-white shrink-0">
+                <div class="flex gap-2">
+                    <input id="input-new-agenda" type="text" placeholder="输入事项并回车..." onkeypress="if(event.key === 'Enter') addNewAgenda()" class="flex-1 px-3 py-1.5 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-calTeal text-xs bg-white text-gray-800 shadow-inner">
+                    <button onclick="addNewAgenda()" class="bg-calTeal hover:bg-[#144d59] text-white p-1.5 rounded transition flex items-center justify-center shadow-sm">
+                        <span class="material-icons text-sm">add</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-divider" id="resizer-2" data-left="pane-agenda" data-right="pane-onenote"></div>
+
+        <!-- 右侧 OneNote 笔记空间 -->
+        <div id="pane-onenote" class="flex-1 flex flex-row overflow-hidden bg-white relative">
+            
+            <!-- 分区标签栏 -->
+            <div id="pane-sections" class="bg-gray-50 border-r border-gray-200 flex flex-col justify-between shrink-0 overflow-hidden transition-all duration-300 relative shadow-sm" style="width: 105px; min-width: 60px; max-width: 160px;">
+                <div class="flex flex-col h-full overflow-hidden">
+                    <div id="sections-header" class="p-2 border-b border-gray-200 flex items-center justify-between select-none bg-gray-100">
+                        <div class="flex items-center gap-1.5 expanded-only">
+                            <span class="material-icons text-onenote-purple text-base">menu_book</span>
+                        </div>
+                        <button onclick="toggleSectionPane(!state.sectionsCollapsed)" class="p-1 hover:bg-gray-200 rounded text-onenote-purple flex items-center justify-center transition cursor-pointer" title="收起/展开标签栏">
+                            <span id="collapse-toggle-icon" class="material-icons text-base">first_page</span>
+                        </button>
+                    </div>
+
+                    <div id="onenote-sections-list" class="flex-1 overflow-y-auto py-2 space-y-1.5 px-1"></div>
+
+                    <div class="p-2 border-t border-gray-200 flex items-center justify-center bg-gray-100">
+                        <button onclick="showCreateSectionModal()" class="w-8 h-8 rounded-full border border-onenote-purple text-onenote-purple hover:bg-purple-50 flex items-center justify-center transition shadow-sm bg-white" title="添加新分区标签">
+                            <span class="material-icons text-lg">add</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-divider" id="resizer-sections" data-left="pane-sections" data-right="pane-pages"></div>
+
+            <!-- 页面列表栏 -->
+            <div id="pane-pages" class="bg-white border-r border-gray-200 flex flex-col shrink-0 overflow-hidden relative" style="width: 170px; min-width: 50px; max-width: 260px;">
+                <div class="p-2 border-b border-gray-200 flex items-center justify-between bg-gray-50 shrink-0 gap-1">
+                    <div class="flex items-center gap-1 w-full expanded-only">
+                        <button onclick="createNewPage()" class="w-full justify-center border border-onenote-purple text-onenote-purple hover:bg-purple-50 font-semibold text-[11px] py-1 px-1 rounded transition flex items-center gap-1 truncate whitespace-nowrap bg-white">
+                            <span class="material-icons text-sm">edit</span><span class="truncate">ページの追加</span>
+                        </button>
+                    </div>
+                    <button onclick="togglePagesPane(!state.pagesCollapsed)" class="p-1 hover:bg-gray-200 rounded text-onenote-purple flex items-center justify-center transition cursor-pointer shrink-0" title="收起/展开页面栏">
+                        <span id="pages-collapse-icon" class="material-icons text-base">first_page</span>
+                    </button>
+                </div>
+                <div id="onenote-pages-list" class="flex-1 overflow-y-auto py-1 px-1"></div>
+            </div>
+
+            <div class="col-divider" id="resizer-pages" data-left="pane-pages" data-right="pane-editor"></div>
+
+            <!-- 编辑器空间 -->
+            <div id="pane-editor" class="flex-1 flex flex-col overflow-hidden bg-white px-8 py-6 relative select-text">
+                <div class="flex items-start justify-between border-b border-gray-200 pb-3 mb-3 shrink-0">
+                    <div class="flex-1">
+                        <input id="note-title-input" type="text" placeholder="无标题页" oninput="syncNoteTitle(this.value)" class="w-full text-2xl font-bold text-gray-900 border-none outline-none focus:ring-0 placeholder-gray-400 bg-transparent">
+                        <div id="note-date-display" class="text-xs text-gray-400 mt-1">加载中...</div>
+                    </div>
+                    <div class="flex items-center space-x-3">
+                        <span id="save-indicator" class="text-xs text-gray-500 flex items-center gap-1 select-none">
+                            <span class="material-icons text-xs text-blue-600 animate-spin">sync</span><span>正在加载云端数据...</span>
+                        </span>
+                        <button id="btn-delete-page" onclick="showDeletePageModal()" class="text-gray-400 hover:text-red-600 p-1 rounded transition" title="删除当前页面">
+                            <span class="material-icons text-lg">delete</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 手写与富文本控制栏 -->
+                <div class="flex items-center gap-2 mb-3 shrink-0 select-none overflow-x-auto pb-1">
+                    <button onclick="setDrawMode(false)" id="btn-mode-text" class="px-3 py-1.5 text-xs font-bold bg-onenote-purple text-white rounded transition shadow-sm border border-transparent whitespace-nowrap">
+                        文本 / 粘图
+                    </button>
+                    <button onclick="setDrawMode(true)" id="btn-mode-draw" class="px-3 py-1.5 text-xs font-bold bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300 rounded transition flex items-center gap-1 whitespace-nowrap">
+                        <span class="material-icons text-[14px]">draw</span> 手写模式
+                    </button>
+
+                    <!-- 手写工具栏拓展区 -->
+                    <div id="drawing-tools-bar" class="hidden items-center gap-1.5 pl-2 border-l border-gray-300 flex-nowrap shrink-0">
+                        <button onclick="toggleCanvasFullscreen()" id="btn-canvas-fullscreen" class="px-2.5 py-1 text-xs font-bold bg-onenote-purple text-white hover:bg-onenote-purpleHover rounded transition flex items-center gap-1 shadow-sm whitespace-nowrap" title="全屏最大化画布">
+                            <span class="material-icons text-[13px]">fullscreen</span> 全屏画布
+                        </button>
+
+                        <div class="h-4 w-[1px] bg-gray-300 mx-1"></div>
+
+                        <span class="text-[11px] text-gray-600 font-semibold whitespace-nowrap">画笔:</span>
+                        <button onclick="setPenColor('#ffffff', this)" class="w-5 h-5 rounded-full bg-white border border-gray-400 shadow-sm transition transform hover:scale-110 ring-2 ring-gray-300 shrink-0" title="白色"></button>
+                        <button onclick="setPenColor('#00ffcc', this)" class="w-5 h-5 rounded-full bg-[#00ffcc] shadow-sm transition transform hover:scale-110 shrink-0" title="荧光绿"></button>
+                        <button onclick="setPenColor('#ccff00', this)" class="w-5 h-5 rounded-full bg-[#ccff00] shadow-sm transition transform hover:scale-110 shrink-0" title="荧光黄"></button>
+                        <button onclick="setPenColor('#ef4444', this)" class="w-5 h-5 rounded-full bg-red-500 shadow-sm transition transform hover:scale-110 shrink-0" title="红色"></button>
+                        <button onclick="setPenColor('#3b82f6', this)" class="w-5 h-5 rounded-full bg-blue-500 shadow-sm transition transform hover:scale-110 shrink-0" title="蓝色"></button>
+                        <button onclick="setPenColor('#ec4899', this)" class="w-5 h-5 rounded-full bg-pink-500 shadow-sm transition transform hover:scale-110 shrink-0" title="粉色"></button>
+
+                        <div class="h-4 w-[1px] bg-gray-300 mx-1"></div>
+                        
+                        <button onclick="setEraserMode(this)" id="btn-eraser" class="px-2.5 py-1 text-xs font-bold bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300 rounded transition flex items-center gap-1 whitespace-nowrap">
+                            <span class="material-icons text-[13px]">cleaning_services</span> 橡皮擦
+                        </button>
+                        <button onclick="clearDrawing()" class="px-2.5 py-1 text-xs font-bold text-red-600 hover:bg-red-50 border border-red-200 rounded transition whitespace-nowrap">
+                            清空画布
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 笔记与画布层叠区 -->
+                <div class="flex-1 overflow-y-auto relative rounded border border-gray-200" id="editor-container">
+                    <div id="note-content-input" contenteditable="true" oninput="syncNoteContent(this.innerHTML)" class="w-full min-h-full outline-none text-sm leading-relaxed text-gray-900 p-3" placeholder="单击此处输入文本，或直接使用快捷键 Ctrl+V 粘贴剪贴板内的图片..."></div>
+                    
+                    <!-- 手写画布层 -->
+                    <canvas id="drawing-canvas" class="absolute top-0 left-0 pointer-events-none z-10 cursor-crosshair"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 弹窗：新建分区 -->
+    <div id="modal-create-section" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden opacity-0 transition-opacity duration-200">
+        <div class="bg-white border border-gray-200 rounded-lg p-6 max-w-sm w-full mx-4 shadow-2xl transform scale-95 transition-transform duration-200 text-gray-800">
+            <h3 class="text-lg font-bold text-gray-900 mb-3">新しいセクション (新建分区)</h3>
+            <input id="input-modal-section-title" type="text" placeholder="请输入分区名称..." class="w-full px-3 py-2 border border-gray-300 bg-white rounded focus:outline-none focus:ring-1 focus:ring-onenote-purple text-sm mb-4 text-gray-800">
+            <div class="flex justify-end space-x-2">
+                <button onclick="closeCreateSectionModal()" class="px-4 py-2 text-xs font-semibold text-gray-500 hover:bg-gray-100 rounded transition">取消</button>
+                <button onclick="submitCreateSection()" class="px-4 py-2 text-xs font-semibold bg-onenote-purple hover:bg-onenote-purpleHover text-white rounded transition shadow-sm">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 弹窗：确认提示 -->
+    <div id="modal-confirm" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden opacity-0 transition-opacity duration-200">
+        <div class="bg-white border border-gray-200 rounded-lg p-6 max-w-sm w-full mx-4 shadow-2xl transform scale-95 transition-transform duration-200 text-gray-800">
+            <h3 id="confirm-title" class="text-lg font-bold text-gray-900 mb-2">提示</h3>
+            <p id="confirm-message" class="text-sm text-gray-600 mb-4">确认要执行此操作吗？</p>
+            <div class="flex justify-end space-x-2">
+                <button onclick="closeConfirmModal(false)" class="px-4 py-2 text-xs font-semibold text-gray-500 hover:bg-gray-100 rounded transition">取消</button>
+                <button onclick="closeConfirmModal(true)" class="px-4 py-2 text-xs font-semibold bg-red-600 hover:bg-red-700 text-white rounded transition shadow-sm">确认</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK 模块引入与全局挂载 -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+        import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCwncuilBycFd8mUJmMgeA-XtqqErMQTCU",
+            authDomain: "batman-memo.firebaseapp.com",
+            projectId: "batman-memo",
+            storageBucket: "batman-memo.firebasestorage.app",
+            messagingSenderId: "624609310313",
+            appId: "1:624609310313:web:e0fbb4a48deff83f8014f8",
+            measurementId: "G-FHDC90ZQCX"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        window.db = db;
+        window.fsDoc = doc;
+        window.fsSetDoc = setDoc;
+        window.fsGetDoc = getDoc;
+
+        window.dispatchEvent(new Event('firebase-ready'));
+    </script>
+
+    <!-- 应用常规逻辑控制 -->
+    <script>
+        const weatherCitiesData = {
+            "Yokohama": {
+                current: { temp: 24, cond: "阴天转阵雨", icon: "cloud", prob: "35%", humidity: "72%", wind: "2.5m/s" },
+                hourly: Array.from({length: 24}, (_, i) => ({ time: `${String(i).padStart(2, '0')}:00`, temp: 20 + (i%5), icon: 'cloud', prob: 20 + (i%4)*10 })),
+                weekly: [ { day: "周三", cond: "雨", icon: "umbrella", tempMin: 19, tempMax: 24 }, { day: "周四", cond: "阴", icon: "cloud", tempMin: 20, tempMax: 25 }, { day: "周五", cond: "多云", icon: "cloud_queue", tempMin: 21, tempMax: 27 }, { day: "周六", cond: "晴", icon: "wb_sunny", tempMin: 22, tempMax: 30 }, { day: "周日", cond: "晴", icon: "wb_sunny", tempMin: 23, tempMax: 31 }, { day: "周一", cond: "多云", icon: "cloud_queue", tempMin: 21, tempMax: 28 }, { day: "周二", cond: "阵雨", icon: "grain", tempMin: 20, tempMax: 26 } ]
+            },
+            "Tokyo": {
+                current: { temp: 25, cond: "多云偏晴", icon: "cloud_queue", prob: "15%", humidity: "65%", wind: "3.1m/s" },
+                hourly: Array.from({length: 24}, (_, i) => ({ time: `${String(i).padStart(2, '0')}:00`, temp: 22 + (i%5), icon: i>6 && i<18 ? 'wb_sunny':'cloud', prob: 10 + (i%3)*10 })),
+                weekly: [ { day: "周三", cond: "阴", icon: "cloud", tempMin: 20, tempMax: 26 }, { day: "周四", cond: "晴", icon: "wb_sunny", tempMin: 22, tempMax: 29 }, { day: "周五", cond: "多云", icon: "cloud_queue", tempMin: 21, tempMax: 28 }, { day: "周六", cond: "晴", icon: "wb_sunny", tempMin: 23, tempMax: 32 }, { day: "周日", cond: "多云", icon: "cloud_queue", tempMin: 22, tempMax: 29 }, { day: "周一", cond: "雨", icon: "umbrella", tempMin: 20, tempMax: 25 }, { day: "周二", cond: "晴", icon: "wb_sunny", tempMin: 21, tempMax: 28 } ]
+            },
+            "Beijing": {
+                current: { temp: 32, cond: "晴朗", icon: "wb_sunny", prob: "0%", humidity: "30%", wind: "1.2m/s" },
+                hourly: Array.from({length: 24}, (_, i) => ({ time: `${String(i).padStart(2, '0')}:00`, temp: 28 + (i%5), icon: 'wb_sunny', prob: 0 })),
+                weekly: [ { day: "周三", cond: "晴", icon: "wb_sunny", tempMin: 22, tempMax: 35 }, { day: "周四", cond: "晴", icon: "wb_sunny", tempMin: 24, tempMax: 34 } ]
+            },
+            "Shanghai": {
+                current: { temp: 28, cond: "多云", icon: "cloud_queue", prob: "10%", humidity: "80%", wind: "4.0m/s" },
+                hourly: Array.from({length: 24}, (_, i) => ({ time: `${String(i).padStart(2, '0')}:00`, temp: 25 + (i%4), icon: 'cloud_queue', prob: 10 })),
+                weekly: [ { day: "周三", cond: "多云", icon: "cloud_queue", tempMin: 25, tempMax: 31 }, { day: "周四", cond: "雷阵雨", icon: "flash_on", tempMin: 26, tempMax: 30 } ]
+            }
+        };
+
+        const holidaysMap = {
+            "2026-01-01": "元旦", "2026-02-15": "除夕", "2026-02-16": "春节", "2026-04-05": "清明", "2026-05-01": "劳动节", "2026-06-19": "端午", "2026-09-25": "中秋", "2026-10-01": "国庆",
+            "2026-01-01": "元日", "2026-01-12": "成人の日", "2026-02-11": "建国記念", "2026-02-23": "天皇誕生日", "2026-03-20": "春分の日", "2026-04-29": "昭和の日", "2026-05-03": "憲法記念日", "2026-05-04": "みどりの日", "2026-05-05": "こどもの日", "2026-07-20": "海の日", "2026-08-11": "山の日", "2026-09-21": "敬老の日", "2026-09-22": "国民の休日", "2026-09-23": "秋分の日", "2026-10-12": "スポーツの日", "2026-11-03": "文化の日", "2026-11-23": "勤労感謝"
+        };
+
+        function getTodayKey() {
+            const now = new Date();
+            const y = now.getFullYear();
+            const m = String(now.getMonth() + 1).padStart(2, '0');
+            const d = String(now.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        // 初始化全局状态，selectedAgendaDate 用于记录当前中间预定面板选中的日期
+        let state = {
+            viewMonth: new Date().getMonth(),
+            viewYear: new Date().getFullYear(),
+            selectedAgendaDate: getTodayKey(),
+            sectionsCollapsed: false,
+            pagesCollapsed: false,
+            currentCity: "Yokohama",
+            agenda: JSON.parse(localStorage.getItem('ow_agenda')) || {},
+            notebook: JSON.parse(localStorage.getItem('ow_notebook')) || {
+                sections: [
+                    {
+                        id: 'sec-default',
+                        title: '默认分区',
+                        pages: [{ id: 'p-1', title: '欢迎使用工作台', date: '', content: '在这里输入或粘贴笔记...', drawing: null }]
+                    }
+                ],
+                activeSectionId: 'sec-default',
+                activePageId: 'p-1'
+            }
+        };
+
+        const todayKey = getTodayKey();
+        if (!state.agenda[todayKey]) {
+            state.agenda[todayKey] = [{ id: 'a1', text: '欢迎使用个人工作台', done: false }];
+        }
+
+        function updateHeaderDateDisplay() {
+            const now = new Date();
+            const weeks = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+            const year = now.getFullYear();
+            const month = now.getMonth() + 1;
+            const date = now.getDate();
+            const weekStr = weeks[now.getDay()];
+
+            const dateKey = getTodayKey();
+            const holiday = holidaysMap[dateKey] || `农历 ${month}月${date}日`;
+
+            const largeDateEl = document.getElementById('large-date-header');
+            const largeLunarEl = document.getElementById('large-lunar-header');
+            if (largeDateEl) largeDateEl.textContent = `${month}月${date}日, ${weekStr}`;
+            if (largeLunarEl) largeLunarEl.textContent = holiday;
+        }
+
+        let saveTimeout = null;
+        function saveData(instant = false) {
+            localStorage.setItem('ow_agenda', JSON.stringify(state.agenda));
+            localStorage.setItem('ow_notebook', JSON.stringify(state.notebook));
+            
+            const indicator = document.getElementById('save-indicator');
+
+            async function performCloudSync() {
+                if (indicator) {
+                    indicator.innerHTML = `<span class="material-icons text-xs text-blue-600 animate-spin">sync</span><span>正在云端同步...</span>`;
+                }
+                if (window.db && window.fsDoc && window.fsSetDoc) {
+                    try {
+                        await window.fsSetDoc(window.fsDoc(window.db, "workspaces", "default-user"), {
+                            agenda: state.agenda,
+                            notebook: state.notebook,
+                            updatedAt: new Date().toISOString()
+                        });
+                        if (indicator) {
+                            indicator.innerHTML = `<span class="material-icons text-xs text-green-600">done</span><span>已同步至云端</span>`;
+                        }
+                    } catch (error) {
+                        console.error("Firestore 同步错误: ", error);
+                        if (indicator) {
+                            indicator.innerHTML = `<span class="material-icons text-xs text-red-600">error</span><span>仅本地保存 (云端同步失败)</span>`;
+                        }
+                    }
+                } else {
+                    if (indicator) {
+                        indicator.innerHTML = `<span class="material-icons text-xs text-yellow-600">cloud_off</span><span>已本地保存 (未连接云)</span>`;
+                    }
+                }
+            }
+
+            if (instant) {
+                clearTimeout(saveTimeout);
+                performCloudSync();
+            } else {
+                if (indicator) {
+                    indicator.innerHTML = `<span class="material-icons text-xs text-yellow-600 animate-pulse">edit</span><span>修改中...</span>`;
+                }
+                clearTimeout(saveTimeout);
+                saveTimeout = setTimeout(performCloudSync, 1500);
+            }
+        }
+
+        window.onload = function() {
+            updateHeaderDateDisplay();
+            startLiveClock();
+            renderWeather();
+            populateJumpSelects();
+            initializeResizers();
+
+            const indicator = document.getElementById('save-indicator');
+
+            async function initAppData() {
+                if (window.db && window.fsDoc && window.fsGetDoc) {
+                    try {
+                        const docSnap = await window.fsGetDoc(window.fsDoc(window.db, "workspaces", "default-user"));
+                        if (docSnap.exists()) {
+                            const cloudData = docSnap.data();
+                            if (cloudData.agenda) state.agenda = cloudData.agenda;
+                            if (cloudData.notebook) state.notebook = cloudData.notebook;
+                        }
+                        if (indicator) {
+                            indicator.innerHTML = `<span class="material-icons text-xs text-green-600">cloud_done</span><span>云端加载成功</span>`;
+                        }
+                    } catch (error) {
+                        console.error("无法加载云端备份，回退到本地缓存: ", error);
+                        if (indicator) {
+                            indicator.innerHTML = `<span class="material-icons text-xs text-yellow-600">warning</span><span>离线模式 (使用本地数据)</span>`;
+                        }
+                    }
+                }
+
+                const currentTodayKey = getTodayKey();
+                if (!state.agenda[currentTodayKey]) {
+                    state.agenda[currentTodayKey] = [];
+                }
+
+                renderCalendar();
+                renderAgenda();
+                renderOneNoteLayout();
+                initDrawingCanvas();
+            }
+
+            if (window.db) {
+                initAppData();
+            } else {
+                window.addEventListener('firebase-ready', initAppData);
+                
+                setTimeout(() => {
+                    if (!window.db) {
+                        console.warn("Firebase 模块加载超时，自动进入离线本地状态。");
+                        renderCalendar();
+                        renderAgenda();
+                        renderOneNoteLayout();
+                        initDrawingCanvas();
+                        if (indicator) {
+                            indicator.innerHTML = `<span class="material-icons text-xs text-red-500">cloud_off</span><span>加载超时 (离线使用)</span>`;
+                        }
+                    }
+                }, 4000);
+            }
+
+            document.addEventListener('click', (e) => {
+                const dropdown = document.getElementById('month-picker-dropdown');
+                if(!dropdown.classList.contains('hidden') && e.target.id !== 'calendar-month-year' && !e.target.closest('#calendar-month-year')) {
+                    dropdown.classList.add('hidden');
+                }
+            });
+
+            document.addEventListener('fullscreenchange', () => {
+                const fsBtn = document.getElementById('btn-canvas-fullscreen');
+                if (!fsBtn) return;
+                
+                setTimeout(resizeCanvasToContainer, 150);
+
+                if (document.fullscreenElement) {
+                    fsBtn.innerHTML = `<span class="material-icons text-[13px]">fullscreen_exit</span> 窗口复原`;
+                    fsBtn.title = "窗口复原";
+                } else {
+                    fsBtn.innerHTML = `<span class="material-icons text-[13px]">fullscreen</span> 全屏画布`;
+                    fsBtn.title = "全屏最大化画布";
+                }
+            });
+
+            window.addEventListener('resize', () => {
+                resizeCanvasToContainer();
+            });
+        };
+
+        function renderCalendar() {
+            const grid = document.getElementById('calendar-days-grid');
+            grid.innerHTML = '';
+            document.getElementById('calendar-month-year').firstElementChild.textContent = `${state.viewYear}年${state.viewMonth + 1}月`;
+            
+            const firstDay = new Date(state.viewYear, state.viewMonth, 1).getDay();
+            const daysInMonth = new Date(state.viewYear, state.viewMonth + 1, 0).getDate();
+            const startOffset = (firstDay === 0 ? 6 : firstDay - 1);
+            
+            for (let i = 0; i < startOffset; i++) {
+                grid.innerHTML += `<div></div>`;
+            }
+            
+            const today = new Date();
+            for (let i = 1; i <= daysInMonth; i++) {
+                const dateKey = `${state.viewYear}-${String(state.viewMonth + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+                const dayOfWeek = new Date(state.viewYear, state.viewMonth, i).getDay();
+                const holidayName = holidaysMap[dateKey];
+                const isToday = (state.viewYear === today.getFullYear() && state.viewMonth === today.getMonth() && i === today.getDate());
+                const isSelected = (dateKey === state.selectedAgendaDate);
+
+                let colorClass = 'text-gray-700 hover:bg-gray-200';
+                if (isSelected) {
+                    colorClass = 'bg-calTeal text-white font-bold shadow-md ring-2 ring-teal-300';
+                } else if (isToday) {
+                    colorClass = 'border border-calTeal text-calTeal font-bold hover:bg-teal-50';
+                } else if (holidayName || dayOfWeek === 0) {
+                    colorClass = 'text-red-600 font-bold hover:bg-red-50';
+                } else if (dayOfWeek === 6) {
+                    colorClass = 'text-blue-600 font-semibold hover:bg-blue-50';
+                }
+
+                const subLabel = holidayName ? holidayName : `初${i}`;
+                const subColor = isSelected ? 'text-teal-100' : (holidayName ? 'text-red-500 font-semibold' : 'text-gray-400');
+
+                const dayCell = document.createElement('div');
+                dayCell.className = `py-0.5 cursor-pointer rounded transition flex flex-col items-center justify-center ${colorClass}`;
+                dayCell.innerHTML = `
+                    <span class="text-[11px] leading-tight">${i}</span>
+                    <span class="text-[7.5px] leading-tight truncate max-w-[32px] ${subColor}">${subLabel}</span>
+                `;
+                dayCell.onclick = () => {
+                    state.selectedAgendaDate = dateKey;
+                    renderCalendar();
+                    renderAgenda();
+                };
+                grid.appendChild(dayCell);
+            }
+        }
+        function prevMonth() { state.viewMonth--; if(state.viewMonth < 0) { state.viewMonth = 11; state.viewYear--; } renderCalendar(); }
+        function nextMonth() { state.viewMonth++; if(state.viewMonth > 11) { state.viewMonth = 0; state.viewYear++; } renderCalendar(); }
+        function jumpToToday() { 
+            const t = new Date(); 
+            state.viewMonth = t.getMonth(); 
+            state.viewYear = t.getFullYear(); 
+            state.selectedAgendaDate = getTodayKey();
+            renderCalendar(); 
+            renderAgenda();
+        }
+        
+        function populateJumpSelects() {
+            const yearSelect = document.getElementById('jump-year-select');
+            const currentYear = new Date().getFullYear();
+            for(let y = currentYear - 10; y <= currentYear + 10; y++) {
+                const option = document.createElement('option');
+                option.value = y; option.text = y + "年";
+                if(y === state.viewYear) option.selected = true;
+                yearSelect.appendChild(option);
+            }
+        }
+        function toggleMonthPicker(e) {
+            e.stopPropagation();
+            const dropdown = document.getElementById('month-picker-dropdown');
+            dropdown.classList.toggle('hidden');
+            document.getElementById('jump-year-select').value = state.viewYear;
+            document.getElementById('jump-month-select').value = state.viewMonth;
+        }
+        function confirmJumpYearMonth() {
+            state.viewYear = parseInt(document.getElementById('jump-year-select').value);
+            state.viewMonth = parseInt(document.getElementById('jump-month-select').value);
+            document.getElementById('month-picker-dropdown').classList.add('hidden');
+            renderCalendar();
+        }
+
+        function startLiveClock() {
+            const hhEl = document.getElementById('clock-hh');
+            const mmEl = document.getElementById('clock-mm');
+            const ssEl = document.getElementById('clock-ss');
+            if (!hhEl) return;
+
+            function updateClock() {
+                const now = new Date();
+                hhEl.textContent = String(now.getHours()).padStart(2, '0');
+                mmEl.textContent = String(now.getMinutes()).padStart(2, '0');
+                ssEl.textContent = String(now.getSeconds()).padStart(2, '0');
+            }
+            setInterval(updateClock, 1000);
+            updateClock();
+        }
+
+        function switchWeatherCity(city) { state.currentCity = city; renderWeather(); }
+        function renderWeather() {
+            const data = weatherCitiesData[state.currentCity];
+            if (!data) return;
+
+            document.getElementById('weather-current-temp').textContent = data.current.temp + '°C';
+            document.getElementById('weather-current-cond').textContent = data.current.cond;
+            document.getElementById('weather-current-prob').textContent = data.current.prob;
+            document.getElementById('weather-current-humidity').textContent = data.current.humidity;
+            document.getElementById('weather-current-wind').textContent = data.current.wind;
+
+            const hourlyHtml = data.hourly.map(h => `
+                <div class="flex flex-col items-center justify-center bg-gray-50 border border-gray-200 rounded py-1 px-1.5 min-w-[42px] shadow-sm">
+                    <span class="text-[9px] text-gray-500">${h.time}</span>
+                    <span class="material-icons text-[13px] text-gray-600 my-0.5">${h.icon}</span>
+                    <span class="text-[10px] font-bold text-gray-800">${h.temp}°</span>
+                    <span class="text-[8.5px] text-blue-500">${h.prob}%</span>
+                </div>
+            `).join('');
+            document.getElementById('weather-hourly-list').innerHTML = hourlyHtml;
+
+            const weeklyHtml = data.weekly.map(w => `
+                <div class="flex items-center justify-between text-[11px] py-1 px-2 hover:bg-gray-100 rounded border-b border-gray-100 last:border-0 transition">
+                    <span class="w-10 text-gray-500 font-medium">${w.day}</span>
+                    <div class="flex items-center gap-1.5 w-16">
+                        <span class="material-icons text-[14px] text-gray-500">${w.icon}</span>
+                        <span class="text-gray-700 truncate">${w.cond}</span>
+                    </div>
+                    <div class="flex items-center gap-1.5 w-20 justify-end font-medium">
+                        <span class="text-blue-500">${w.tempMin}°</span>
+                        <span class="text-gray-400">-</span>
+                        <span class="text-orange-500">${w.tempMax}°</span>
+                    </div>
+                </div>
+            `).join('');
+            document.getElementById('weather-weekly-list').innerHTML = weeklyHtml;
+        }
+
+        function renderAgenda() {
+            const container = document.getElementById('agenda-items-container');
+            container.innerHTML = '';
+            
+            const dateStr = state.selectedAgendaDate; // 读取当前选中的日期
+            const parts = dateStr.split('-');
+            const panelTitleEl = document.getElementById('agenda-panel-title');
+            if (panelTitleEl) {
+                panelTitleEl.innerHTML = `<span class="material-icons text-onenote-purple text-base">format_list_bulleted</span><span>${parts[1]}月${parts[2]}日 预定</span>`;
+            }
+
+            const items = state.agenda[dateStr] || [];
+            document.getElementById('agenda-count').textContent = items.length;
+
+            if (items.length === 0) {
+                container.innerHTML = `<div class="text-xs text-gray-400 text-center mt-4">这一天还没有安排预定哦</div>`;
+                return;
+            }
+
+            items.forEach((item, index) => {
+                const el = document.createElement('div');
+                el.className = "flex items-start gap-2 group p-2 rounded hover:bg-white transition border border-transparent hover:border-gray-200 bg-white shadow-sm";
+                el.innerHTML = `
+                    <div class="mt-0.5 cursor-pointer" onclick="toggleAgenda('${dateStr}', ${index})">
+                        <span class="material-icons text-base ${item.done ? 'text-calTeal' : 'text-gray-300 hover:text-calTeal'}">
+                            ${item.done ? 'check_circle' : 'radio_button_unchecked'}
+                        </span>
+                    </div>
+                    <div class="flex-1 text-xs ${item.done ? 'text-gray-400 line-through' : 'text-gray-700'} leading-relaxed mt-0.5">${item.text}</div>
+                    <button onclick="deleteAgenda('${dateStr}', ${index})" class="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition p-0.5">
+                        <span class="material-icons text-[14px]">close</span>
+                    </button>
+                `;
+                container.appendChild(el);
+            });
+        }
+        function addNewAgenda() {
+            const input = document.getElementById('input-new-agenda');
+            const text = input.value.trim();
+            if(!text) return;
+            const dateStr = state.selectedAgendaDate; // 写入到当前选中的日期
+            if(!state.agenda[dateStr]) state.agenda[dateStr] = [];
+            state.agenda[dateStr].push({ id: Date.now().toString(), text: text, done: false });
+            input.value = '';
+            saveData(true);
+            renderAgenda();
+        }
+        function toggleAgenda(dateStr, index) {
+            state.agenda[dateStr][index].done = !state.agenda[dateStr][index].done;
+            saveData(true);
+            renderAgenda();
+        }
+        function deleteAgenda(dateStr, index) {
+            state.agenda[dateStr].splice(index, 1);
+            saveData(true);
+            renderAgenda();
+        }
+
+        function toggleSectionPane(collapse) {
+            const pane = document.getElementById('pane-sections');
+            const icon = document.getElementById('collapse-toggle-icon');
+            state.sectionsCollapsed = collapse;
+            if (collapse) {
+                pane.classList.add('is-collapsed');
+                pane.style.width = '45px';
+                if(icon) icon.textContent = 'last_page';
+            } else {
+                pane.classList.remove('is-collapsed');
+                pane.style.width = '105px';
+                if(icon) icon.textContent = 'first_page';
+            }
+        }
+
+        function togglePagesPane(collapse) {
+            const pane = document.getElementById('pane-pages');
+            const icon = document.getElementById('pages-collapse-icon');
+            state.pagesCollapsed = collapse;
+            if (collapse) {
+                pane.classList.add('is-collapsed');
+                pane.style.width = '45px';
+                if(icon) icon.textContent = 'last_page';
+            } else {
+                pane.classList.remove('is-collapsed');
+                pane.style.width = '170px';
+                if(icon) icon.textContent = 'first_page';
+            }
+        }
+
+        function renderOneNoteLayout() {
+            renderSections();
+            renderPages();
+            renderActivePageContent();
+        }
+
+        function renderSections() {
+            const listContainer = document.getElementById('onenote-sections-list');
+            listContainer.innerHTML = '';
+            state.notebook.sections.forEach((section, index) => {
+                const isActive = state.notebook.activeSectionId === section.id;
+                const item = document.createElement('div');
+                item.className = `group relative flex items-center justify-between mx-1 py-1.5 px-2.5 rounded-md cursor-pointer text-[11px] font-bold transition ${isActive ? 'bg-onenote-purpleLight text-onenote-purple border border-onenote-purple/30' : 'text-gray-600 border border-transparent hover:bg-gray-200'}`;
+                
+                item.innerHTML = `
+                    <span class="truncate flex-1 text-left expanded-only">${section.title}</span>
+                    <span class="collapsed-only mx-auto text-center font-bold text-[14px]">${section.title.charAt(0)}</span>
+                    <button onclick="event.stopPropagation(); showDeleteSectionModal('${section.id}')" class="text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition p-0.5 ml-1 expanded-only" title="删除分区">
+                        <span class="material-icons text-[14px]">close</span>
+                    </button>
+                `;
+                item.onclick = () => {
+                    state.notebook.activeSectionId = section.id;
+                    const activeSec = state.notebook.sections.find(s => s.id === section.id);
+                    state.notebook.activePageId = activeSec.pages[0]?.id || '';
+                    saveData(true);
+                    renderOneNoteLayout();
+                };
+                listContainer.appendChild(item);
+            });
+        }
+
+        function renderPages() {
+            const listContainer = document.getElementById('onenote-pages-list');
+            listContainer.innerHTML = '';
+            const currentSection = state.notebook.sections.find(s => s.id === state.notebook.activeSectionId);
+            if (!currentSection) return;
+
+            currentSection.pages.forEach(page => {
+                const isActive = state.notebook.activePageId === page.id;
+                const card = document.createElement('div');
+                card.className = `mx-1 my-1 p-1.5 rounded-md cursor-pointer transition border ${isActive ? 'bg-onenote-purpleLight text-onenote-purple border-onenote-purple/30' : 'hover:bg-gray-100 text-gray-700 border-transparent'}`;
+                card.innerHTML = `
+                    <h4 class="text-[11px] font-bold truncate expanded-only">${page.title}</h4>
+                    <span class="collapsed-only mx-auto text-center font-bold text-[12px] text-onenote-purple">${page.title.charAt(0)}</span>
+                `;
+                card.onclick = () => {
+                    state.notebook.activePageId = page.id;
+                    saveData(true);
+                    renderOneNoteLayout();
+                };
+                listContainer.appendChild(card);
+            });
+        }
+
+        function createNewPage() {
+            const currentSection = state.notebook.sections.find(s => s.id === state.notebook.activeSectionId);
+            if (!currentSection) return;
+            const newId = 'p-' + Date.now();
+            const dateObj = new Date();
+            const dateStr = `${dateObj.getFullYear()}年${dateObj.getMonth()+1}月${dateObj.getDate()}日 ${String(dateObj.getHours()).padStart(2,'0')}:${String(dateObj.getMinutes()).padStart(2,'0')}`;
+            currentSection.pages.push({
+                id: newId,
+                title: '无标题页',
+                date: dateStr,
+                content: '',
+                drawing: null
+            });
+            state.notebook.activePageId = newId;
+            saveData(true);
+            renderOneNoteLayout();
+        }
+
+        let ctx;
+        let isDrawingMode = false;
+        let isDrawing = false;
+        let currentPenColor = '#ffffff';
+        let isEraserActive = false;
+
+        function resizeCanvasToContainer() {
+            const canvas = document.getElementById('drawing-canvas');
+            const container = document.getElementById('editor-container');
+            if (!canvas || !container) return;
+
+            const rect = container.getBoundingClientRect();
+            const w = Math.round(rect.width);
+            const h = Math.round(rect.height);
+
+            if (w <= 0 || h <= 0) return;
+            if (canvas.width === w && canvas.height === h) return;
+
+            let tempCanvas = null;
+            if (canvas.width > 0 && canvas.height > 0) {
+                tempCanvas = document.createElement('canvas');
+                tempCanvas.width = canvas.width;
+                tempCanvas.height = canvas.height;
+                let tCtx = tempCanvas.getContext('2d');
+                tCtx.drawImage(canvas, 0, 0);
+            }
+
+            canvas.width = w;
+            canvas.height = h;
+
+            ctx = canvas.getContext('2d');
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            if (isEraserActive) {
+                ctx.globalCompositeOperation = 'destination-out';
+                ctx.lineWidth = 30;
+            } else {
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.strokeStyle = currentPenColor;
+                ctx.lineWidth = 4;
+            }
+
+            if (tempCanvas) {
+                ctx.drawImage(tempCanvas, 0, 0, tempCanvas.width, tempCanvas.height, 0, 0, w, h);
+            } else {
+                const currentSection = state.notebook.sections.find(s => s.id === state.notebook.activeSectionId);
+                const page = currentSection?.pages.find(p => p.id === state.notebook.activePageId);
+                if (page && page.drawing) {
+                    const img = new Image();
+                    img.onload = () => {
+                        ctx.drawImage(img, 0, 0, w, h);
+                    };
+                    img.src = page.drawing;
+                }
+            }
+        }
+
+        function initDrawingCanvas() {
+            const canvas = document.getElementById('drawing-canvas');
+            if (!canvas) return;
+
+            resizeCanvasToContainer();
+
+            function getMousePos(e) {
+                const rect = canvas.getBoundingClientRect();
+                return {
+                    x: e.clientX - rect.left,
+                    y: e.clientY - rect.top
+                };
+            }
+
+            canvas.addEventListener('mousedown', (e) => {
+                if (!isDrawingMode) return;
+                isDrawing = true;
+                const pos = getMousePos(e);
+                ctx.beginPath();
+                ctx.moveTo(pos.x, pos.y);
+            });
+
+            canvas.addEventListener('mousemove', (e) => {
+                if (!isDrawing || !isDrawingMode) return;
+                const pos = getMousePos(e);
+                if (isEraserActive) {
+                    ctx.clearRect(pos.x - 20, pos.y - 20, 40, 40);
+                } else {
+                    ctx.lineTo(pos.x, pos.y);
+                    ctx.stroke();
+                }
+            });
+
+            const stopDrawing = () => {
+                if (isDrawing) {
+                    isDrawing = false;
+                    saveDrawingToState();
+                }
+            };
+            canvas.addEventListener('mouseup', stopDrawing);
+            canvas.addEventListener('mouseleave', stopDrawing);
+        }
+
+        function setDrawMode(active) {
+            isDrawingMode = active;
+            const canvas = document.getElementById('drawing-canvas');
+            const editor = document.getElementById('note-content-input');
+            const editorContainer = document.getElementById('editor-container');
+            const btnText = document.getElementById('btn-mode-text');
+            const btnDraw = document.getElementById('btn-mode-draw');
+            const toolsBar = document.getElementById('drawing-tools-bar');
+
+            if (active) {
+                resizeCanvasToContainer();
+                canvas.classList.remove('pointer-events-none');
+                editorContainer.classList.add('draw-mode-active');
+                editor.classList.add('draw-mode-hidden');
+                btnDraw.className = "px-3 py-1.5 text-xs font-bold bg-gray-800 text-white rounded transition shadow-sm border border-gray-700 flex items-center gap-1 whitespace-nowrap";
+                btnText.className = "px-3 py-1.5 text-xs font-bold bg-white text-gray-500 hover:bg-gray-100 border border-gray-300 rounded transition whitespace-nowrap";
+                toolsBar.classList.remove('hidden');
+                toolsBar.classList.add('flex');
+            } else {
+                canvas.classList.add('pointer-events-none');
+                editorContainer.classList.remove('draw-mode-active');
+                editor.classList.remove('draw-mode-hidden');
+                btnText.className = "px-3 py-1.5 text-xs font-bold bg-onenote-purple text-white rounded transition shadow-sm border border-transparent whitespace-nowrap";
+                btnDraw.className = "px-3 py-1.5 text-xs font-bold bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300 rounded transition flex items-center gap-1 whitespace-nowrap";
+                toolsBar.classList.remove('flex');
+                toolsBar.classList.add('hidden');
+            }
+        }
+
+        function setPenColor(color, btn) {
+            isEraserActive = false;
+            currentPenColor = color;
+            if (ctx) {
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 4;
+            }
+            document.getElementById('btn-eraser').classList.remove('bg-gray-300', 'border-gray-500');
+        }
+
+        function setEraserMode(btn) {
+            isEraserActive = !isEraserActive;
+            if (isEraserActive) {
+                btn.classList.add('bg-gray-300', 'border-gray-500');
+                if (ctx) {
+                    ctx.globalCompositeOperation = 'destination-out';
+                    ctx.lineWidth = 30;
+                }
+            } else {
+                btn.classList.remove('bg-gray-300', 'border-gray-500');
+                if (ctx) {
+                    ctx.globalCompositeOperation = 'source-over';
+                    ctx.strokeStyle = currentPenColor;
+                    ctx.lineWidth = 4;
+                }
+            }
+        }
+
+        function toggleCanvasFullscreen() {
+            const editorPane = document.getElementById('pane-editor');
+            if (!document.fullscreenElement) {
+                editorPane.requestFullscreen().catch(err => {
+                    console.error(`无法进入全屏: ${err.message}`);
+                });
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        function saveDrawingToState() {
+            const canvas = document.getElementById('drawing-canvas');
+            const currentSection = state.notebook.sections.find(s => s.id === state.notebook.activeSectionId);
+            const page = currentSection?.pages.find(p => p.id === state.notebook.activePageId);
+            if (page) {
+                page.drawing = canvas.toDataURL(); 
+                saveData(true);
+            }
+        }
+
+        function clearDrawing() {
+            const canvas = document.getElementById('drawing-canvas');
+            if(ctx) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+            saveDrawingToState();
+        }
+
+        function syncNoteTitle(val) {
+            const currentSection = state.notebook.sections.find(s => s.id === state.notebook.activeSectionId);
+            const page = currentSection?.pages.find(p => p.id === state.notebook.activePageId);
+            if (page) { page.title = val.trim() || '无标题页'; saveData(); renderPages(); }
+        }
+
+        function syncNoteContent(val) {
+            const currentSection = state.notebook.sections.find(s => s.id === state.notebook.activeSectionId);
+            const page = currentSection?.pages.find(p => p.id === state.notebook.activePageId);
+            if (page) { page.content = val; saveData(); }
+        }
+
+        function renderActivePageContent() {
+            const currentSection = state.notebook.sections.find(s => s.id === state.notebook.activeSectionId);
+            const page = currentSection?.pages.find(p => p.id === state.notebook.activePageId);
+            
+            document.getElementById('note-title-input').value = page ? (page.title === '无标题页' ? '' : page.title) : '';
+            document.getElementById('note-content-input').innerHTML = page ? page.content : '';
+            document.getElementById('note-date-display').textContent = page ? page.date : '暂无数据';
+
+            const canvas = document.getElementById('drawing-canvas');
+            if(ctx && canvas) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                if (page && page.drawing) {
+                    const img = new Image();
+                    img.onload = () => { 
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height); 
+                    };
+                    img.src = page.drawing;
+                }
+            }
+        }
+
+        function showCreateSectionModal() {
+            const modal = document.getElementById('modal-create-section');
+            modal.classList.remove('hidden');
+            setTimeout(() => { modal.classList.remove('opacity-0'); modal.firstElementChild.classList.remove('scale-95'); }, 10);
+            document.getElementById('input-modal-section-title').focus();
+        }
+        function closeCreateSectionModal() {
+            const modal = document.getElementById('modal-create-section');
+            modal.classList.add('opacity-0'); modal.firstElementChild.classList.add('scale-95');
+            setTimeout(() => { modal.classList.add('hidden'); document.getElementById('input-modal-section-title').value = ''; }, 200);
+        }
+        function submitCreateSection() {
+            const title = document.getElementById('input-modal-section-title').value.trim();
+            if (!title) return;
+            const newId = 'sec-' + Date.now();
+            state.notebook.sections.push({ id: newId, title: title, pages: [] });
+            state.notebook.activeSectionId = newId;
+            closeCreateSectionModal();
+            createNewPage(); 
+        }
+
+        let confirmActionCallback = null;
+
+        function showDeleteSectionModal(sectionId) {
+            if (state.notebook.sections.length <= 1) {
+                alert("至少需要保留一个分区！");
+                return;
+            }
+            const sec = state.notebook.sections.find(s => s.id === sectionId);
+            if (!sec) return;
+
+            document.getElementById('confirm-title').textContent = '删除分区';
+            document.getElementById('confirm-message').textContent = `确定要永久删除分区“${sec.title}”及其下属的所有页面吗？`;
+            
+            confirmActionCallback = () => {
+                state.notebook.sections = state.notebook.sections.filter(s => s.id !== sectionId);
+                if (state.notebook.activeSectionId === sectionId) {
+                    state.notebook.activeSectionId = state.notebook.sections[0].id;
+                    state.notebook.activePageId = state.notebook.sections[0].pages[0]?.id || '';
+                }
+                saveData(true);
+                renderOneNoteLayout();
+            };
+
+            const modal = document.getElementById('modal-confirm');
+            modal.classList.remove('hidden');
+            setTimeout(() => { modal.classList.remove('opacity-0'); modal.firstElementChild.classList.remove('scale-95'); }, 10);
+        }
+
+        function showDeletePageModal() {
+            const currentSection = state.notebook.sections.find(s => s.id === state.notebook.activeSectionId);
+            if (!currentSection || currentSection.pages.length === 0) return;
+            
+            document.getElementById('confirm-title').textContent = '删除页面';
+            document.getElementById('confirm-message').textContent = '确定要永久删除此页面吗？删除后将无法恢复。';
+            
+            confirmActionCallback = () => {
+                currentSection.pages = currentSection.pages.filter(p => p.id !== state.notebook.activePageId);
+                if (currentSection.pages.length > 0) {
+                    state.notebook.activePageId = currentSection.pages[0].id;
+                } else {
+                    state.notebook.activePageId = '';
+                }
+                saveData(true);
+                renderOneNoteLayout();
+            };
+            
+            const modal = document.getElementById('modal-confirm');
+            modal.classList.remove('hidden');
+            setTimeout(() => { modal.classList.remove('opacity-0'); modal.firstElementChild.classList.remove('scale-95'); }, 10);
+        }
+        function closeConfirmModal(confirm) {
+            const modal = document.getElementById('modal-confirm');
+            modal.classList.add('opacity-0'); modal.firstElementChild.classList.add('scale-95');
+            setTimeout(() => { modal.classList.add('hidden'); }, 200);
+            if (confirm && confirmActionCallback) {
+                confirmActionCallback();
+                confirmActionCallback = null;
+            }
+        }
+
+        function initializeResizers() {
+            const resizers = [
+                { id: 'resizer-1', left: 'pane-left-container', right: 'pane-agenda' },
+                { id: 'resizer-2', left: 'pane-agenda', right: 'pane-onenote' },
+                { id: 'resizer-sections', left: 'pane-sections', right: 'pane-pages' },
+                { id: 'resizer-pages', left: 'pane-pages', right: 'pane-editor' }
+            ];
+
+            resizers.forEach(r => {
+                const resizer = document.getElementById(r.id);
+                if(!resizer) return;
+                const leftPane = document.getElementById(r.left);
+                let isDragging = false;
+                let startX, startWidth;
+
+                resizer.addEventListener('mousedown', (e) => {
+                    isDragging = true;
+                    startX = e.clientX;
+                    startWidth = leftPane.getBoundingClientRect().width;
+                    resizer.classList.add('dragging');
+                    document.body.style.cursor = 'col-resize';
+                    document.body.style.userSelect = 'none';
+                });
+
+                document.addEventListener('mousemove', (e) => {
+                    if (!isDragging) return;
+                    const dx = e.clientX - startX;
+                    let newWidth = startWidth + dx;
+                    
+                    const minW = parseInt(window.getComputedStyle(leftPane).minWidth) || 50;
+                    const maxW = parseInt(window.getComputedStyle(leftPane).maxWidth) || 600;
+                    if (newWidth < minW) newWidth = minW;
+                    if (newWidth > maxW) newWidth = maxW;
+
+                    leftPane.style.width = `${newWidth}px`;
+                    resizeCanvasToContainer();
+                });
+
+                document.addEventListener('mouseup', () => {
+                    if (isDragging) {
+                        isDragging = false;
+                        resizer.classList.remove('dragging');
+                        document.body.style.cursor = '';
+                        document.body.style.userSelect = '';
+                        resizeCanvasToContainer();
+                    }
+                });
+            });
+        }
+    </script>
+</body>
+</html>
